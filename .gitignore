@@ -1,4 +1,80 @@
-.env
-.venv/
+# --- Python cache & build files ---
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+*.pyo
+*.pyd
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+MANIFEST
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+
+# --- IDE / Editor files ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+
+# --- Environment & credentials ---
+.env
+.env.local
+*.key
+*.pem
+*.crt
+
+# --- Logs & temporary data ---
+*.log
+logs/
+tmp/
+temp/
+.DS_Store
+Thumbs.db
+
+# --- Jupyter / notebooks ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Test & coverage outputs ---
+htmlcov/
+.tox/
+.coverage
+.cache
+.pytest_cache/
+
+# --- Node / frontend assets (if you later add UI) ---
+node_modules/
+npm-debug.log
+package-lock.json
+yarn.lock
+
+# --- Data files ---
+*.csv
+*.jsonl
+*.parquet
+data/
+datasets/
+outputs/
+
+# --- Model / AI specific ---
+*.bin
+*.pt
+*.onnx
+*.ckpt
+*.weights
+
+# --- Misc ---
+*.zip
+*.tar
+*.gz
+*.bak
