@@ -1,3 +1,5 @@
+# run with `streamlit run metrics_ui.py`
+
 import os
 import sys
 import csv
@@ -23,7 +25,6 @@ def _estimate_tokens_from_messages(messages: list[dict]) -> int:
     # very rough: chars / 4
     return max(1, len(text) // 4)
 
-
 def load_client() -> OpenAI:
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -32,13 +33,11 @@ def load_client() -> OpenAI:
         st.stop()
     return OpenAI(api_key=api_key)
 
-
 def load_rows_from_text(csv_text: str) -> list[dict]:
     """Load CSV from an in-memory string and return list of rows as dicts."""
     f = io.StringIO(csv_text)
     reader = csv.DictReader(f)
     return [row for row in reader]
-
 
 def _to_float(value, default: float = 0.0) -> float:
     try:
@@ -46,13 +45,11 @@ def _to_float(value, default: float = 0.0) -> float:
     except (TypeError, ValueError):
         return default
 
-
 def _to_int(value, default: int = 0) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return default
-
 
 def compute_stats(rows: list[dict]) -> dict:
     """Return a dict like:
@@ -105,7 +102,6 @@ def compute_stats(rows: list[dict]) -> dict:
 
     return stats
 
-
 def stats_to_dataframe(stats: dict) -> pd.DataFrame:
     """Convert the stats dict into a pandas DataFrame indexed by endpoint."""
     rows = []
@@ -125,7 +121,6 @@ def stats_to_dataframe(stats: dict) -> pd.DataFrame:
     df = pd.DataFrame(rows).set_index("endpoint")
     return df
 
-
 def build_summary_prompt(stats: dict) -> list[dict]:
     """Return chat messages for the model."""
     prompt = [
@@ -143,7 +138,6 @@ def build_summary_prompt(stats: dict) -> list[dict]:
         }
     ]
     return prompt
-
 
 def summarize_with_openai(
     stats: dict,
@@ -206,7 +200,6 @@ def summarize_with_openai(
 
     full_text = "".join(collected_chunks)
     return full_text
-
 
 # =======================
 # 🌐 Streamlit Frontend
