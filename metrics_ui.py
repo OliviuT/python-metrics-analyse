@@ -3,9 +3,8 @@ import sys
 import csv
 import math
 import io
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import pandas as pd
-
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -41,6 +40,20 @@ def load_rows_from_text(csv_text: str) -> list[dict]:
     return [row for row in reader]
 
 
+def _to_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def compute_stats(rows: list[dict]) -> dict:
     """Return a dict like:
     {
@@ -62,12 +75,13 @@ def compute_stats(rows: list[dict]) -> dict:
         "by_endpoint": {}
     }
 
-    endpoint_data: Dict[str, List[float]] = {}
+    # Store (latency_ms, status_code) per endpoint
+    endpoint_data: Dict[str, List[Tuple[float, int]]] = {}
 
     for row in rows:
-        endpoint = row.get("endpoint", "unknown")
-        latency = float(row.get("latency_ms", 0))
-        status_code = int(row.get("status_code", 200))
+        endpoint = (row.get("endpoint") or "unknown").strip() or "unknown"
+        latency = _to_float(row.get("latency_ms"), 0.0)
+        status_code = _to_int(row.get("status_code"), 200)
 
         if endpoint not in endpoint_data:
             endpoint_data[endpoint] = []
@@ -90,6 +104,7 @@ def compute_stats(rows: list[dict]) -> dict:
         }
 
     return stats
+
 
 def stats_to_dataframe(stats: dict) -> pd.DataFrame:
     """Convert the stats dict into a pandas DataFrame indexed by endpoint."""
@@ -130,9 +145,14 @@ def build_summary_prompt(stats: dict) -> list[dict]:
     return prompt
 
 
-def summarize_with_openai(stats: dict) -> str:
+def summarize_with_openai(
+    stats: dict,
+    placeholder: st.delta_generator.DeltaGenerator | None = None,
+) -> str:
     """Call Chat Completions and return the summary text.
-    Here we use non-streaming for simplicity in the web UI.
+
+    If a Streamlit placeholder is provided, update it as tokens stream in,
+    so the user sees the response being built live.
     """
     client = load_client()
     model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -155,23 +175,37 @@ def summarize_with_openai(stats: dict) -> str:
             "Reduce prompt size or MAX_OUTPUT_TOKENS."
         )
 
-    response = client.chat.completions.create(
+    # --- Streaming call ---
+    collected_chunks: list[str] = []
+
+    stream = client.chat.completions.create(
         model=model_name,
         messages=messages,
         max_tokens=MAX_OUTPUT_TOKENS,
+        stream=True,
     )
 
-    content = response.choices[0].message.content or ""
-    usage = getattr(response, "usage", None)
-    if usage:
-        # You can also display this in the UI if you like
-        print(
-            f"[Token usage] prompt={usage.prompt_tokens}, "
-            f"completion={usage.completion_tokens}, "
-            f"total={usage.total_tokens}"
-        )
+    # Initialize UI once; then update same placeholder to avoid duplicate keys/widgets
+    if placeholder is not None:
+        placeholder.markdown("### AI prompt response / analysis\n\n")
 
-    return content
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+
+        delta = chunk.choices[0].delta
+        if delta and delta.content:
+            text = delta.content
+            collected_chunks.append(text)
+
+            # Update the UI as we go, if a placeholder is provided
+            if placeholder is not None:
+                placeholder.markdown(
+                    "### AI prompt response / analysis\n\n" + "".join(collected_chunks)
+                )
+
+    full_text = "".join(collected_chunks)
+    return full_text
 
 
 # =======================
@@ -215,45 +249,39 @@ with col2:
                 if not rows:
                     st.error("The CSV seems to be empty or has no data rows.")
                 else:
+                    # 1) Compute stats
                     stats = compute_stats(rows)
                     st.write("Computed stats:")
                     st.json(stats)
 
-                    rows = load_rows_from_text(csv_text)
-                    if not rows:
-                        st.error("The CSV seems to be empty or has no data rows.")
-                    else:
-                        stats = compute_stats(rows)
-                        st.write("Computed stats:")
-                        st.json(stats)
-
-                        # 🔢 Convert stats to DataFrame for charting
-                        df = stats_to_dataframe(stats)
-
-                        if df.empty:
-                            st.warning("No endpoints found in stats to chart.")
-                        else:
-                            st.subheader("3️⃣ Visualizations by Endpoint")
-
-                            st.markdown("**Requests per endpoint**")
-                            st.bar_chart(df["count"])
-
-                            st.markdown("**Errors per endpoint**")
-                            st.bar_chart(df["errors"])
-
-                            st.markdown("**Error rate per endpoint (%)**")
-                            st.bar_chart(df["error_rate"] * 100.0)
-
-                            st.markdown("**Average latency per endpoint (ms)**")
-                            st.bar_chart(df["avg_latency_ms"])
-
-                            st.markdown("**95th percentile latency per endpoint (ms)**")
-                            st.bar_chart(df["p95_latency_ms"])
-                            
+                    # 2) Call OpenAI and show analysis (TOP, streamed)
+                    placeholder = st.empty()
                     with st.spinner("Calling OpenAI for analysis..."):
-                        analysis_text = summarize_with_openai(stats)
+                        analysis_text = summarize_with_openai(stats, placeholder=placeholder)
+                    # no extra text_area here – the placeholder already shows it
 
-                    st.text_area("AI prompt response / analysis", analysis_text, height=300)
+
+                    # 3) Graphs BELOW the AI response
+                    #df = stats_to_dataframe(stats)
+                    #if df.empty:
+                    #    st.warning("No endpoints found in stats to chart.")
+                    #else:
+                    #    st.subheader("3️⃣ Visualizations by Endpoint")
+
+                    #   st.markdown("**Requests per endpoint**")
+                    #    st.bar_chart(df["count"])
+
+                        #st.markdown("**Errors per endpoint**")
+                        #st.bar_chart(df["errors"])
+
+                        #st.markdown("**Error rate per endpoint (%)**")
+                        #st.bar_chart(df["error_rate"] * 100.0)
+
+                        #st.markdown("**Average latency per endpoint (ms)**")
+                        #st.bar_chart(df["avg_latency_ms"])
+
+                        #st.markdown("**95th percentile latency per endpoint (ms)**")
+                        #st.bar_chart(df["p95_latency_ms"])
             except Exception as exc:
                 st.error(f"Error while processing: {exc}")
     else:

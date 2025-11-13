@@ -89,7 +89,6 @@ def build_summary_prompt(stats: dict) -> list[dict]:
     ]
     return prompt
 
-
 def summarize_with_openai(stats: dict, stream: bool = True) -> str:
     """Call Chat Completions and return the summary text.
     If stream=True, print tokens as they arrive.
@@ -126,7 +125,6 @@ def summarize_with_openai(stats: dict, stream: bool = True) -> str:
 
     return "".join(collected_chunks)
 
-
 def main():
     """Wire everything together, accept a CSV path from argv."""
     if len(sys.argv) != 2:
@@ -148,8 +146,5 @@ def main():
     print(summary)
     print("\n===========================\n")
 
-
 if __name__ == "__main__":
     main()
-    
-
